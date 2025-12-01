@@ -1,0 +1,49 @@
+# Disable node exporter
+nodeExporter:
+  enabled: false
+
+# Keep Prometheus service internal
+server:
+  service:
+    type: ClusterIP
+
+  remoteWrite:
+    - url: "http://vmetrics.observability.svc.cluster.local:8428/api/v1/write"
+
+# Prometheus alerting rules (as a proper YAML object, not a string)
+serverFiles:
+  alerts:
+    groups:
+    - name: example.rules
+      rules:
+      - alert: HighPodRestartRate
+        expr: increase(kube_pod_container_status_restarts_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod restart rate is high"
+          description: "Pod {{ $labels.pod }} restarted at least once in the last 5 minutes."
+
+# Alertmanager subchart configuration
+alertmanager:
+  enabled: true
+  config:
+    global:
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'abiolaseyip@gmail.com'
+      smtp_auth_username: 'abiolaseyip@gmail.com'
+      smtp_auth_password: 'hjlo koyx ivxu izzz'
+
+    route:
+      receiver: 'default-email'
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 3h
+
+    receivers:
+      - name: 'default-email'
+        email_configs:
+          - to: 'abiolaseyip@gmail.com'
+            send_resolved: true
+

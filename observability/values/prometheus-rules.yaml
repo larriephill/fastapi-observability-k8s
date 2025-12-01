@@ -1,0 +1,44 @@
+groups:
+  - name: fastapi-alerts
+    rules:
+
+      # 1) High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate"
+          description: "More than 10% of requests are failing with 5xx errors."
+
+      # 2) High latency (p99 > 0.2s)
+      - alert: HighLatencyP99
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 99th percentile latency"
+          description: "p99 latency is above 200ms."
+
+      # 3) Pod restarting
+      - alert: PodRestarting
+        expr: increase(kube_pod_container_status_restarts_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod restart detected"
+          description: "Pod has restarted within the last 5 minutes."
+
+      # 4) High CPU usage (>80%)
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{container!="POD"}[5m]) > 0.8
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High CPU usage"
+          description: "Container CPU usage is above 80%."
+

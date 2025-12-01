@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-config
+  namespace: observability
+  labels:
+    app: alertmanager
+type: Opaque
+stringData:
+  alertmanager.yaml: |
+    global:
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'abiolaseyip@gmail.com'
+      smtp_auth_username: 'abiolaseyip@gmail.com'
+      smtp_auth_password: 'hjlo koyx ivxu izzz'  
+
+    route:
+      receiver: 'default-email'
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 3h
+
+    receivers:
+      - name: 'default-email'
+        email_configs:
+          - to: 'abiolaseyip@gmail.com'
+            send_resolved: true
+

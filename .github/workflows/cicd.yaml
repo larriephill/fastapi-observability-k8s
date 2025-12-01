@@ -1,0 +1,79 @@
+name: FastAPI CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/fastapi:${{ github.sha }} .
+      
+      - name: Push image
+        run: |
+          docker push ghcr.io/${{ github.repository }}/fastapi:${{ github.sha }}
+
+      - name: Upload image tag
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-tag
+          path: image.txt
+        run: echo "${{ github.sha }}" > image.txt
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Kubernetes
+        uses: azure/k8s-set-context@v3
+        with:
+          method: oidc
+          clusterName: mycluster
+          resourceGroup: none
+          subscriptionId: none
+          context: mycluster
+
+      - name: Download image tag
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tag
+
+      - name: Deploy using Helm
+        run: |
+          IMAGE_TAG=$(cat image.txt)
+          helm upgrade --install fastapi-prod ./helm/fastapi \
+            --namespace prod \
+            --set image.repository=ghcr.io/${{ github.repository }}/fastapi \
+            --set image.tag=$IMAGE_TAG \
+            -f helm/fastapi/values-prod.yaml
+
