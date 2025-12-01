@@ -15,80 +15,72 @@ jobs:
       packages: write
       id-token: write
 
-build:
-  name: Build and Push Image
-  runs-on: ubuntu-latest
+    steps:
+      - name: Checkout observability repo
+        uses: actions/checkout@v4
 
-  permissions:
-    contents: read
-    packages: write
-    id-token: write
+      - name: Clone FastAPI app repo
+        run: |
+          git clone https://github.com/larriephill/fastapi-k8s-demo.git
 
-  steps:
-    - name: Checkout observability repo
-      uses: actions/checkout@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Clone FastAPI app repo
-      run: |
-        git clone https://github.com/larriephill/fastapi-k8s-demo.git
+      - name: Build image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/fastapi:${{ github.sha }} fastapi-k8s-demo
 
-    - name: Login to GHCR
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push image
+        run: |
+          docker push ghcr.io/${{ github.repository }}/fastapi:${{ github.sha }}
 
-    - name: Build image
-      run: |
-        docker build -t ghcr.io/${{ github.repository }}/fastapi:${{ github.sha }} fastapi-k8s-demo
+      - name: Save image tag
+        run: echo "${{ github.sha }}" > image.txt
 
-    - name: Push image
-      run: |
-        docker push ghcr.io/${{ github.repository }}/fastapi:${{ github.sha }}
+      - name: Upload image tag
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-tag
+          path: image.txt
 
-    - name: Save image tag
-      run: echo "${{ github.sha }}" > image.txt
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build
 
-    - name: Upload image tag
-      uses: actions/upload-artifact@v4
-      with:
-        name: image-tag
-        path: image.txt
+    permissions:
+      id-token: write
+      contents: read
 
-deploy:
-  name: Deploy to Kubernetes
-  runs-on: ubuntu-latest
-  needs: build
+    steps:
+      - name: Checkout observability repo
+        uses: actions/checkout@v4
 
-  permissions:
-    id-token: write
-    contents: read
+      - name: Clone FastAPI app repo
+        run: |
+          git clone https://github.com/larriephill/fastapi-k8s-demo.git
 
-  steps:
-    - name: Checkout observability repo
-      uses: actions/checkout@v4
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
 
-    - name: Clone FastAPI app repo
-      run: |
-        git clone https://github.com/larriephill/fastapi-k8s-demo.git
+      - name: Download image tag
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tag
 
-    - name: Configure kubectl
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
+      - name: Deploy using Helm
+        run: |
+          IMAGE_TAG=$(cat image.txt)
+          helm upgrade --install fastapi-prod fastapi-k8s-demo/helm/fastapi \
+            --namespace prod \
+            --set image.repository=ghcr.io/${{ github.repository }}/fastapi \
+            --set image.tag=$IMAGE_TAG \
+            -f fastapi-k8s-demo/helm/fastapi/values-prod.yaml
 
-    - name: Download image tag
-      uses: actions/download-artifact@v4
-      with:
-        name: image-tag
-
-    - name: Deploy using Helm
-      run: |
-        IMAGE_TAG=$(cat image.txt)
-        helm upgrade --install fastapi-prod fastapi-k8s-demo/helm/fastapi \
-          --namespace prod \
-          --set image.repository=ghcr.io/${{ github.repository }}/fastapi \
-          --set image.tag=$IMAGE_TAG \
-          -f fastapi-k8s-demo/helm/fastapi/values-prod.yaml
 
