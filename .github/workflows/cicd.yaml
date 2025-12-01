@@ -54,14 +54,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Authenticate to Kubernetes
-        uses: azure/k8s-set-context@v3
-        with:
-          method: oidc
-          clusterName: mycluster
-          resourceGroup: none
-          subscriptionId: none
-          context: mycluster
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
+
 
       - name: Download image tag
         uses: actions/download-artifact@v4
